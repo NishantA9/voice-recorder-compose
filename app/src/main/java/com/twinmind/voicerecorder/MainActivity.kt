@@ -45,11 +45,8 @@ class MainActivity : ComponentActivity() {
 
     private val launcher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-            if (result.values.all { it }) {
-                startRecordingService()
-            } else {
-                RecordingStatusHolder.status.value = "Permission Denied"
-            }
+            if (result.values.all { it }) startRecordingService()
+            else RecordingStatusHolder.status.value = "Permission Denied"
         }
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -59,25 +56,26 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             var selectedTab by remember { mutableStateOf(0) }
+
             Scaffold(
                 bottomBar = {
                     NavigationBar {
                         NavigationBarItem(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
-                            icon = { Icon(Icons.Default.Mic, "Record") },
+                            icon = { Icon(Icons.Filled.Mic, contentDescription = "Record") },
                             label = { Text("Record") }
                         )
                         NavigationBarItem(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
-                            icon = { Icon(Icons.Default.TextSnippet, "Transcript") },
+                            icon = { Icon(Icons.Filled.TextSnippet, contentDescription = "Transcript") },
                             label = { Text("Transcript") }
                         )
                         NavigationBarItem(
                             selected = selectedTab == 2,
                             onClick = { selectedTab = 2 },
-                            icon = { Icon(Icons.Default.Summarize, "Summary") },
+                            icon = { Icon(Icons.Filled.Summarize, contentDescription = "Summary") },
                             label = { Text("Summary") }
                         )
                     }
@@ -95,60 +93,43 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun registerReceivers() {
-        // --- STATUS UPDATE RECEIVER ---
         statusReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                intent?.getStringExtra("status")?.let {
-                    RecordingStatusHolder.status.value = it
-                    Log.d("MainActivity", "Status: $it")
-                }
+                val msg = intent?.getStringExtra("status") ?: return
+                RecordingStatusHolder.status.value = msg
+                Log.d("MainActivity", "Status update: $msg")
             }
         }
 
-        // --- TRANSCRIPT RECEIVER ---
         transcriptReceiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, i: Intent?) {
-                val text = i?.getStringExtra("text") ?: "Transcript ready ✓"
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val text = intent?.getStringExtra("text") ?: "Transcript ready ✓"
                 RecordingStatusHolder.status.value = "Transcript ready ✓"
                 RecordingStatusHolder.transcript.value = text
             }
         }
 
-        // --- SUMMARY RECEIVER ---
-        val summaryReceiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, i: Intent?) {
-                val text = i?.getStringExtra("summary") ?: "Summary ready ✓"
+        summaryReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val text = intent?.getStringExtra("summary") ?: "Summary ready ✓"
                 RecordingStatusHolder.summary.value = text
             }
         }
 
-        // --- REGISTER RECEIVERS ---
+        val statusFilter = IntentFilter("com.twinmind.voicerecorder.STATUS_UPDATE")
+        val transcriptFilter = IntentFilter("com.twinmind.voicerecorder.TRANSCRIPT_READY")
+        val summaryFilter = IntentFilter("com.twinmind.voicerecorder.SUMMARY_READY")
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(
-                statusReceiver,
-                IntentFilter("com.twinmind.voicerecorder.STATUS_UPDATE"),
-                Context.RECEIVER_NOT_EXPORTED
-            )
-            registerReceiver(
-                transcriptReceiver,
-                IntentFilter("com.twinmind.voicerecorder.TRANSCRIPT_READY"),
-                Context.RECEIVER_NOT_EXPORTED
-            )
-            registerReceiver(
-                summaryReceiver,
-                IntentFilter("com.twinmind.voicerecorder.SUMMARY_READY"),
-                Context.RECEIVER_NOT_EXPORTED
-            )
+            registerReceiver(statusReceiver, statusFilter, Context.RECEIVER_EXPORTED)
+            registerReceiver(transcriptReceiver, transcriptFilter, Context.RECEIVER_EXPORTED)
+            registerReceiver(summaryReceiver, summaryFilter, Context.RECEIVER_EXPORTED)
         } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(statusReceiver, IntentFilter("com.twinmind.voicerecorder.STATUS_UPDATE"))
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(transcriptReceiver, IntentFilter("com.twinmind.voicerecorder.TRANSCRIPT_READY"))
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(summaryReceiver, IntentFilter("com.twinmind.voicerecorder.SUMMARY_READY"))
+            registerReceiver(statusReceiver, statusFilter)
+            registerReceiver(transcriptReceiver, transcriptFilter)
+            registerReceiver(summaryReceiver, summaryFilter)
         }
     }
-
 
     private fun checkAndStartRecording() {
         val allGranted = permissions.all {
@@ -173,9 +154,8 @@ class MainActivity : ComponentActivity() {
             unregisterReceiver(statusReceiver)
             unregisterReceiver(transcriptReceiver)
             unregisterReceiver(summaryReceiver)
-
-        } catch (_: Exception) {
-            // Avoid crash if already unregistered
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Receiver already unregistered: ${e.message}")
         }
     }
 }
@@ -197,7 +177,7 @@ fun RecordingScreen(onStart: () -> Unit, onStop: () -> Unit) {
                 if (isRecording) onStop() else onStart()
                 isRecording = !isRecording
             },
-            modifier = Modifier.width(160.dp)
+            modifier = Modifier.width(180.dp)
         ) {
             Text(if (isRecording) "Stop Recording" else "Start Recording")
         }
@@ -205,15 +185,17 @@ fun RecordingScreen(onStart: () -> Unit, onStop: () -> Unit) {
 }
 
 @Composable fun TranscriptScreen() {
+    val text by RecordingStatusHolder.transcript
     Text(
-        text = "📝 Transcript will appear here once generated.",
+        text = if (text.isEmpty()) "📝 Transcript will appear here once generated." else text,
         modifier = Modifier.padding(24.dp)
     )
 }
 
 @Composable fun SummaryScreen() {
+    val summary by RecordingStatusHolder.summary
     Text(
-        text = "📊 Summary will appear here after processing.",
+        text = if (summary.isEmpty()) "📊 Summary will appear here after processing." else summary,
         modifier = Modifier.padding(24.dp)
     )
 }

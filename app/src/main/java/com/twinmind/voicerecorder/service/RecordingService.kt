@@ -105,8 +105,20 @@ class RecordingService : Service() {
     }
 
     private fun armNextRecorder() {
-        val nextPath = "${externalCacheDir?.absolutePath}/${sessionId}_${chunkIndex + 1}.3gp"
-        nextRecorder = newConfiguredRecorder(nextPath).also { it.prepare() }
+        try {
+            val nextPath = "${externalCacheDir?.absolutePath}/${sessionId}_${chunkIndex + 1}.3gp"
+            // Always release any previous nextRecorder
+            nextRecorder?.release()
+            nextRecorder = null
+
+            nextRecorder = newConfiguredRecorder(nextPath).apply {
+                // Don't call prepare() twice
+                setOutputFile(nextPath)
+                prepare()
+            }
+        } catch (e: Exception) {
+            Log.e("RecordingService", "Error arming next recorder: ${e.message}")
+        }
     }
 
     private fun swapRecorders() {
