@@ -3,7 +3,7 @@
 An Android app built using **Kotlin + Jetpack Compose + WorkManager** for recording audio in the background with automatic session management.
 
 > 🧩 **Note:** This submission demonstrates the recording and session management functionality.  
-> Transcription and summary generation are scaffolded but not fully implemented due to time constraints.
+> Transcription and summary generation are scaffolded but not fully implemented for now.
 
 ---
 
